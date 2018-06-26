@@ -1,6 +1,8 @@
 package terraform
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/terraform/config/configschema"
 	"github.com/hashicorp/terraform/providers"
 	"github.com/zclconf/go-cty/cty"
@@ -15,7 +17,7 @@ type Provider struct {
 	DataSources map[string]providers.Schema
 }
 
-// Provider returns a new terraform provider
+// NewProvider returns a new terraform provider
 // of some sort.
 // Not sure what of this belongs in Configure()
 func NewProvider() *Provider {
@@ -24,7 +26,7 @@ func NewProvider() *Provider {
 			Version: 1,
 		},
 		DataSources: map[string]providers.Schema{
-			"terrafrom_remote_state": {
+			"terraform_remote_state": {
 				Block: &configschema.Block{
 					Attributes: map[string]*configschema.Attribute{
 						"backend": {
@@ -36,7 +38,7 @@ func NewProvider() *Provider {
 							Optional: true,
 						},
 						"defaults": {
-							Type:     cty.Map(cty.DynamicPseudoType), // ???
+							Type:     cty.DynamicPseudoType,
 							Optional: true,
 						},
 						"outputs": {
@@ -46,8 +48,6 @@ func NewProvider() *Provider {
 						"workspace": {
 							Type:     cty.String,
 							Optional: true,
-							// need to deal with defaults elsewhere ....
-							// Default:  backend.DefaultStateName,
 						},
 					},
 				},
@@ -61,28 +61,48 @@ func (t *Provider) GetSchema() providers.GetSchemaResponse {
 	return providers.GetSchemaResponse{
 		Provider:    t.Schema,
 		DataSources: t.DataSources,
-		// Diagnostics
+		// Diagnostics ?
 	}
 }
 
 // ValidateProviderConfig is used to validate the configuration values.
 func (t *Provider) ValidateProviderConfig(providers.ValidateProviderConfigRequest) providers.ValidateProviderConfigResponse {
-	panic("unimplemented")
+	// At this moment there is nothing to configure for the terraform provider,
+	// so we will happily return without taking any action
+	var res providers.ValidateProviderConfigResponse
+	return res
 }
 
 // ValidateDataSourceConfig is used to validate the data source configuration values.
 func (t *Provider) ValidateDataSourceConfig(providers.ValidateDataSourceConfigRequest) providers.ValidateDataSourceConfigResponse {
-	panic("unimplemented")
+	// At this moment there is nothing to configure for the terraform provider,
+	// so we will happily return without taking any action
+	var res providers.ValidateDataSourceConfigResponse
+	return res
 }
 
 // Configure configures and initializes the provider.
 func (t *Provider) Configure(providers.ConfigureRequest) providers.ConfigureResponse {
-	panic("unimplemented")
+	// At this moment there is nothing to configure for the terraform provider,
+	// so we will happily return without taking any action
+	var res providers.ConfigureResponse
+	return res
 }
 
 // ReadDataSource returns the data source's current state.
-func (t *Provider) ReadDataSource(providers.ReadDataSourceRequest) providers.ReadDataSourceResponse {
-	panic("unimplemented")
+func (t *Provider) ReadDataSource(req providers.ReadDataSourceRequest) providers.ReadDataSourceResponse {
+	// call function
+	var res providers.ReadDataSourceResponse
+
+	// This should not happen
+	if req.TypeName != "terraform_remote_state" {
+		res.Diagnostics.Append(fmt.Errorf("Error: unsupported data source %s", req.TypeName))
+		return res
+	}
+
+	// something something call this function dataSourceRemoteStateRead()
+
+	return res
 }
 
 // Stop is called when the provider should halt any in-flight actions.
@@ -127,5 +147,8 @@ func (t *Provider) ImportResourceState(providers.ImportResourceStateRequest) pro
 
 // ValidateResourceTypeConfig is used to to validate the resource configuration values.
 func (t *Provider) ValidateResourceTypeConfig(providers.ValidateResourceTypeConfigRequest) providers.ValidateResourceTypeConfigResponse {
-	panic("unimplemented")
+	// At this moment there is nothing to configure for the terraform provider,
+	// so we will happily return without taking any action
+	var res providers.ValidateResourceTypeConfigResponse
+	return res
 }
