@@ -18,11 +18,14 @@ type Provider struct {
 }
 
 // NewProvider returns a new terraform provider
-// of some sort.
-// Not sure what of this belongs in Configure()
 func NewProvider() *Provider {
-	return &Provider{
-		Schema: providers.Schema{
+	return &Provider{}
+}
+
+// GetSchema returns the complete schema for the provider.
+func (p *Provider) GetSchema() providers.GetSchemaResponse {
+	return providers.GetSchemaResponse{
+		Provider: providers.Schema{
 			Version: 1,
 		},
 		DataSources: map[string]providers.Schema{
@@ -45,6 +48,11 @@ func NewProvider() *Provider {
 							Type:     cty.DynamicPseudoType,
 							Computed: true,
 						},
+						// environment is deprecated
+						"environment": {
+							Type:     cty.String,
+							Optional: true,
+						},
 						"workspace": {
 							Type:     cty.String,
 							Optional: true,
@@ -56,17 +64,8 @@ func NewProvider() *Provider {
 	}
 }
 
-// GetSchema returns the complete schema for the provider.
-func (t *Provider) GetSchema() providers.GetSchemaResponse {
-	return providers.GetSchemaResponse{
-		Provider:    t.Schema,
-		DataSources: t.DataSources,
-		// Diagnostics ?
-	}
-}
-
 // ValidateProviderConfig is used to validate the configuration values.
-func (t *Provider) ValidateProviderConfig(providers.ValidateProviderConfigRequest) providers.ValidateProviderConfigResponse {
+func (p *Provider) ValidateProviderConfig(providers.ValidateProviderConfigRequest) providers.ValidateProviderConfigResponse {
 	// At this moment there is nothing to configure for the terraform provider,
 	// so we will happily return without taking any action
 	var res providers.ValidateProviderConfigResponse
@@ -82,7 +81,7 @@ func (t *Provider) ValidateDataSourceConfig(providers.ValidateDataSourceConfigRe
 }
 
 // Configure configures and initializes the provider.
-func (t *Provider) Configure(providers.ConfigureRequest) providers.ConfigureResponse {
+func (p *Provider) Configure(providers.ConfigureRequest) providers.ConfigureResponse {
 	// At this moment there is nothing to configure for the terraform provider,
 	// so we will happily return without taking any action
 	var res providers.ConfigureResponse
@@ -90,7 +89,7 @@ func (t *Provider) Configure(providers.ConfigureRequest) providers.ConfigureResp
 }
 
 // ReadDataSource returns the data source's current state.
-func (t *Provider) ReadDataSource(req providers.ReadDataSourceRequest) providers.ReadDataSourceResponse {
+func (p *Provider) ReadDataSource(req providers.ReadDataSourceRequest) providers.ReadDataSourceResponse {
 	// call function
 	var res providers.ReadDataSourceResponse
 
@@ -100,13 +99,13 @@ func (t *Provider) ReadDataSource(req providers.ReadDataSourceRequest) providers
 		return res
 	}
 
-	// something something call this function dataSourceRemoteStateRead()
+	// something something call this function dataSourceRemoteStateRead(req.Config)
 
 	return res
 }
 
 // Stop is called when the provider should halt any in-flight actions.
-func (t *Provider) Stop() error {
+func (p *Provider) Stop() error {
 	panic("unimplemented")
 }
 
@@ -118,35 +117,35 @@ func (t *Provider) Stop() error {
 // instance state whose schema version is less than the one reported by the
 // currently-used version of the corresponding provider, and the upgraded
 // result is used for any further processing.
-func (t *Provider) UpgradeResourceState(providers.UpgradeResourceStateRequest) providers.UpgradeResourceStateResponse {
+func (p *Provider) UpgradeResourceState(providers.UpgradeResourceStateRequest) providers.UpgradeResourceStateResponse {
 	panic("unimplemented - terraform_remote_state has no resources")
 }
 
 // ReadResource refreshes a resource and returns its current state.
-func (t *Provider) ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse {
+func (p *Provider) ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse {
 	panic("unimplemented - terraform_remote_state has no resources")
 }
 
 // PlanResourceChange takes the current state and proposed state of a
 // resource, and returns the planned final state.
-func (t *Provider) PlanResourceChange(providers.PlanResourceChangeRequest) providers.PlanResourceChangeResponse {
+func (p *Provider) PlanResourceChange(providers.PlanResourceChangeRequest) providers.PlanResourceChangeResponse {
 	panic("unimplemented - terraform_remote_state has no resources")
 }
 
 // ApplyResourceChange takes the planned state for a resource, which may
 // yet contain unknown computed values, and applies the changes returning
 // the final state.
-func (t *Provider) ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse {
+func (p *Provider) ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse {
 	panic("unimplemented - terraform_remote_state has no resources")
 }
 
 // ImportResourceState requests that the given resource be imported.
-func (t *Provider) ImportResourceState(providers.ImportResourceStateRequest) providers.ImportResourceStateResponse {
+func (p *Provider) ImportResourceState(providers.ImportResourceStateRequest) providers.ImportResourceStateResponse {
 	panic("unimplemented - terraform_remote_state has no resources")
 }
 
 // ValidateResourceTypeConfig is used to to validate the resource configuration values.
-func (t *Provider) ValidateResourceTypeConfig(providers.ValidateResourceTypeConfigRequest) providers.ValidateResourceTypeConfigResponse {
+func (p *Provider) ValidateResourceTypeConfig(providers.ValidateResourceTypeConfigRequest) providers.ValidateResourceTypeConfigResponse {
 	// At this moment there is nothing to configure for the terraform provider,
 	// so we will happily return without taking any action
 	var res providers.ValidateResourceTypeConfigResponse
