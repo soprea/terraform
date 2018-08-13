@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	//	"io"
+	//"io"
 	"log"
+	"sort"
 	//	"net/http"
 	"strings"
 
@@ -15,49 +16,16 @@ import (
 	"github.com/hashicorp/terraform/terraform"
 )
 
+const (
+	stateFileSuffix = ".tfstate"
+	lockFileSuffix  = ".tflock"
+)
+
 func (b *Backend) States() ([]string, error) {
 	result := []string{backend.DefaultStateName}
-	//addressURL, _ := url.Parse(b.address)
-	/*
-		resp, err := http.Get(b.address)
-		log.Printf("[DEBUG] BACKEND Stefan States addressURL is: %s", b.address)
-
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		// Read in the body
-		buf := bytes.NewBuffer(nil)
-		if _, err := io.Copy(buf, resp.Body); err != nil {
-			return nil, fmt.Errorf("Failed to read remote state: %s", err)
-		}
-		log.Printf("[DEBUG] BACKEND Stefan States buf is: %s", buf)
-		result = append(result, buf.String())
-	*/
-	return result, nil
-}
-
-func (b *Backend) DeleteState(name string) error {
-	if name == backend.DefaultStateName || name == "" {
-		return fmt.Errorf("can't delete default state")
-	}
-	c := b.Client()
-
-	return c.Delete()
-}
-
-func (b *Backend) State(name string) (state.State, error) {
-	log.Printf("[DEBUG] BACKEND Stefan State name is: %s", name)
-
-	if name == "" {
-		return nil, errors.New("missing state name")
-	}
-	if name == "bar" || name == "foo" {
-		log.Printf("[DEBUG] BACKEND Stefan State client name is: %s", name)
-	}
 	client := &RemoteClient{
 		client:        b.client,
-		address:       b.statePath(name),
+		address:       b.address,
 		updateMethod:  b.updateMethod,
 		lockAddress:   b.lockAddress,
 		unlockAddress: b.unlockAddress,
@@ -66,7 +34,78 @@ func (b *Backend) State(name string) (state.State, error) {
 		username:      b.username,
 		password:      b.password,
 	}
-	stateMgr := &remote.State{Client: client}
+
+	log.Printf("[DEBUG] BACKEND Stefan States client is: [%+v]", client)
+	resp, err := client.Get()
+	if err != nil {
+		return nil, err
+	}
+	// Read in the body
+	log.Printf("[DEBUG] BACKEND Stefan States resp.Data is: [%s]", string(resp.Data))
+
+	buff := string(resp.Data)
+	log.Printf("[DEBUG] BACKEND Stefan States buff is: [%s]", buff)
+	buff = strings.Replace(buff, ",", " ", -1)
+	buffSlice := strings.Fields(buff)
+	log.Printf("[DEBUG] BACKEND Stefan States buff is: [%s]", buff)
+	log.Printf("[DEBUG] BACKEND Stefan States buff type is: [%T]", buff)
+
+	for _, el := range buffSlice {
+		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", string(el))
+		eltp := strings.TrimSuffix(el, ".tfstate")
+		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", eltp)
+
+		elts := strings.TrimPrefix(eltp, "/")
+		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", elts)
+		if elts != "" {
+			result = append(result, elts)
+		}
+	}
+
+	log.Printf("[DEBUG] BACKEND Stefan States result is: [%s]", result)
+	sort.Strings(result[1:])
+
+	return result, nil
+}
+
+func (b *Backend) DeleteState(name string) error {
+	if name == backend.DefaultStateName || name == "" {
+		return fmt.Errorf("can't delete default state")
+	}
+	client, err := b.remoteClient(name)
+	if err != nil {
+		return err
+	}
+
+	return client.Delete()
+}
+
+// get a remote client configured for this state
+func (b *Backend) remoteClient(name string) (*RemoteClient, error) {
+	if name == "" {
+		return nil, errors.New("missing state name")
+	}
+	client := &RemoteClient{
+		client:        b.client,
+		address:       b.statePath(name),
+		updateMethod:  b.updateMethod,
+		lockAddress:   b.lockPath(name),
+		unlockAddress: b.lockPath(name),
+		lockMethod:    b.lockMethod,
+		unlockMethod:  b.unlockMethod,
+		username:      b.username,
+		password:      b.password,
+	}
+	return client, nil
+}
+
+func (b *Backend) State(name string) (state.State, error) {
+	client, err := b.remoteClient(name)
+	if err != nil {
+		return nil, err
+	}
+
+  stateMgr := &remote.State{Client: client}
 	// take a lock on this state while we write it
 	lockInfo := state.NewLockInfo()
 	lockInfo.Operation = "init"
@@ -113,17 +152,19 @@ func (b *Backend) State(name string) (state.State, error) {
 }
 
 func (b *Backend) statePath(name string) string {
-	if name == backend.DefaultStateName {
-		paths := []string{b.address, "/default.tfstate"}
-		var buf bytes.Buffer
-		for _, p := range paths {
-			buf.WriteString(p)
-		}
-		path := buf.String()
-
-		return path
+	paths := []string{b.address, "/", name, stateFileSuffix}
+	var buf bytes.Buffer
+	for _, p := range paths {
+		buf.WriteString(p)
 	}
-	paths := []string{b.address, "/", name, ".tfstate"}
+	path := buf.String()
+
+	return path
+
+}
+
+func (b *Backend) lockPath(name string) string {
+	paths := []string{b.address, "/", name, lockFileSuffix}
 	var buf bytes.Buffer
 	for _, p := range paths {
 		buf.WriteString(p)

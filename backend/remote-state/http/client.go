@@ -39,9 +39,9 @@ type RemoteClient struct {
 func (c *RemoteClient) Get() (*remote.Payload, error) {
 	// Convert address to type URL
 	addressURL, _ := url.Parse(c.address)
-	resp, err := c.httpRequest("GET", addressURL, nil, "get state")
-	log.Printf("[DEBUG] Client Stefan GET addressURL is: %s", addressURL)
+	log.Printf("[DEBUG] CLIENT Stefan GET client address is: [%+v]", c.address)
 
+	resp, err := c.httpRequest("GET", addressURL, nil, "get state")
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +70,12 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	if _, err := io.Copy(buf, resp.Body); err != nil {
 		return nil, fmt.Errorf("Failed to read remote state: %s", err)
 	}
-	log.Printf("[DEBUG] Client Stefan buf is: %s", buf)
 
 	// Create the payload
 	payload := &remote.Payload{
 		Data: buf.Bytes(),
 	}
-	log.Printf("[DEBUG] Client Stefan payload is: %s", payload)
+	log.Printf("[DEBUG] CLIENT Stefan GET client payload is: [%+v]", payload)
 
 	// If there was no data, then return nil
 	//if buf == nil || len(buf.Bytes()) == 0 {
@@ -110,7 +109,6 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 func (c *RemoteClient) Put(data []byte) error {
 	// Copy the target URL
 	addressURL, _ := url.Parse(c.address)
-	log.Printf("[DEBUG] Client Stefan PUT addressURL is: %s", addressURL)
 
 	base := *addressURL
 	log.Printf("[DEBUG] Client Stefan PUT base is: %#v", base)
@@ -157,14 +155,20 @@ func (c *RemoteClient) Delete() error {
 
 // Lock writes to a lock file, ensuring file creation. Returns the generation number, which must be passed to Unlock().
 func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
+	log.Printf("[DEBUG] CLIENT Stefan LOCK client address is: [%+v]", c.lockAddress)
+
 	lockURL, _ := url.Parse(c.lockAddress)
 	c.lockID = ""
 
 	jsonLockInfo := info.Marshal()
+	log.Printf("[DEBUG] CLIENT Stefan LOCK client jsonLockInfo is: [%s]", jsonLockInfo)
+
 	resp, err := c.httpRequest(c.lockMethod, lockURL, &jsonLockInfo, "lock")
 	if err != nil {
 		return "", err
 	}
+	log.Printf("[DEBUG] CLIENT Stefan LOCK client resp is: [%+v]", resp)
+
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
@@ -179,6 +183,8 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 	case http.StatusConflict, http.StatusLocked:
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
+		log.Printf("[DEBUG] CLIENT Stefan LOCK body is: [%s]", body)
+
 		if err != nil {
 			return "", fmt.Errorf("HTTP remote state already locked, failed to read body")
 		}
@@ -194,11 +200,15 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 }
 
 func (c *RemoteClient) Unlock(id string) error {
+	log.Printf("[DEBUG] CLIENT Stefan UNLOCK client address is: [%+v]", c.unlockAddress)
+
 	unlockURL, _ := url.Parse(c.unlockAddress)
 	resp, err := c.httpRequest(c.unlockMethod, unlockURL, &c.jsonLockInfo, "unlock")
+	log.Printf("[DEBUG] CLIENT Stefan UNLOCK client resp is: [%+v]", resp)
 	if err != nil {
 		return err
 	}
+
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
