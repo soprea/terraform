@@ -13,12 +13,10 @@ import (
 	"strings"
 	"testing"
 )
-
 func TestBackend_impl(t *testing.T) {
 	var _ backend.Backend = new(Backend)
 }
 
-/*
 func TestBackendConfig(t *testing.T) {
 	handler := new(testHTTPHandler)
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
@@ -37,7 +35,7 @@ func TestBackendConfig(t *testing.T) {
 		t.Fatal("Incorrect url was provided.")
 	}
 }
-
+/*
 func TestBackendStates(t *testing.T) {
 	handler := new(testHTTPHandler)
 	ts := httptest.NewServer(http.HandlerFunc(handler.Handle))
@@ -85,7 +83,7 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[DEBUG] TEST Stefan h.Data: [%+v]", h.Data)
 	if h.Data == nil {
 		h.Data = make(map[string][]byte)
-		h.Data["/"] = []byte("default")
+		//h.Data["/"] = []byte("default")
 	}
 	switch r.Method {
 	case http.MethodGet:
@@ -99,6 +97,7 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		case "/":
 			var keys []string
 			for key, _ := range h.Data {
+        // we already return default state from the backend_state
 				keys = append(keys, key)
 			}
 			all := fmt.Sprint(strings.Join(keys, ","))
@@ -162,9 +161,10 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[DEBUG] TEST Stefan LOCK h.data is: [%+v]", h.Data)
 			if h.Locked {
 				log.Printf("[DEBUG] TEST Stefan LOCK catched by if")
-				w.Write(h.Data["/default.tflock"])
-				//w.WriteHeader(423)
-			} else {
+        w.WriteHeader(http.StatusLocked)
+				w.Write([]byte(h.Data["/default.tflock"]))
+        //w.WriteHeader(http.StatusLocked)
+  			} else {
 				log.Printf("[DEBUG] TEST Stefan LOCK catched by else")
 				log.Printf("[DEBUG] TEST Stefan LOCK h.data is: [%+v]", h.Data)
 				if _, ok := h.Data["/default/tflock"]; ok {

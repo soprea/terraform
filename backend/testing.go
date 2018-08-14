@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"log"
 	"reflect"
 	"sort"
 	"testing"
@@ -306,6 +307,7 @@ func testLocks(t *testing.T, b1, b2 Backend, testForceUnlock bool) {
 	// Make sure we can still get the state.State from another instance even
 	// when locked.  This should only happen when a state is loaded via the
 	// backend, and as a remote state.
+
 	_, err = b2.State(DefaultStateName)
 	if err != nil {
 		t.Errorf("failed to read locked state from another backend instance: %s", err)
@@ -317,9 +319,13 @@ func testLocks(t *testing.T, b1, b2 Backend, testForceUnlock bool) {
 		return
 	}
 
+  log.Printf("[DEBUG] TESTING Stefan client B obtained lock while held by client B getting LOCK STARTED")
 	_, err = lockerB.Lock(infoB)
 	if err == nil {
+    log.Printf("[DEBUG] TESTING Stefan client B obtained lock while held by client B getting LOCK PASSED")
+    log.Printf("[DEBUG] TESTING Stefan client B obtained lock while held by client A getting UNLOCK STARTED")
 		lockerA.Unlock(lockIDA)
+    log.Printf("[DEBUG] TESTING Stefan client B obtained lock while held by client A getting UNLOCK PASSED")
 		t.Fatal("client B obtained lock while held by client A")
 	}
 
@@ -356,6 +362,7 @@ func testLocks(t *testing.T, b1, b2 Backend, testForceUnlock bool) {
 	if err != nil {
 		t.Fatal("unable to get re lock A:", err)
 	}
+
 	unlock := func() {
 		err := lockerA.Unlock(lockIDA)
 		if err != nil {

@@ -22,7 +22,8 @@ const (
 )
 
 func (b *Backend) States() ([]string, error) {
-	result := []string{backend.DefaultStateName}
+	//result := []string{backend.DefaultStateName}
+  var result []string
 	client := &RemoteClient{
 		client:        b.client,
 		address:       b.address,
@@ -105,7 +106,7 @@ func (b *Backend) State(name string) (state.State, error) {
 		return nil, err
 	}
 
-  stateMgr := &remote.State{Client: client}
+	stateMgr := &remote.State{Client: client}
 	// take a lock on this state while we write it
 	lockInfo := state.NewLockInfo()
 	lockInfo.Operation = "init"
