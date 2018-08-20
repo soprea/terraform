@@ -123,6 +123,7 @@ func (b *Backend) State(name string) (state.State, error) {
 				the initial state file is created.`
 				return fmt.Errorf(unlockErrMsg, baseErr, err.Error(), lockID, c.lockFileURL())
 			}
+
 			return baseErr
 		}
 
@@ -132,10 +133,12 @@ func (b *Backend) State(name string) (state.State, error) {
 		if err := st.PersistState(); err != nil {
 			return nil, unlock(err)
 		}
+
 		// Unlock, the state should now be initialized
 		if err := unlock(nil); err != nil {
 			return nil, err
 		}
+
 	}
 
 	return st, nil
