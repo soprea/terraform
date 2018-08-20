@@ -33,6 +33,7 @@ func TestBackendConfig(t *testing.T) {
 	}
 	//backends
 	b := backend.TestBackendConfig(t, New(), config).(*Backend)
+  //Test if backend address matches the URL
 	if b.address != urls {
 		t.Fatal("Incorrect url was provided.")
 	}
@@ -67,6 +68,7 @@ type testHTTPHandler struct {
 
 func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if h.Data == nil {
+    // initialize a map that will store all tfstate and tflock files.
 		h.Data = make(map[string][]byte)
 	}
 	switch r.Method {
@@ -145,6 +147,7 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 					h.Locked = true
 				}
 			}
+
 		case "/foo.tflock":
 			if h.Locked {
 				w.WriteHeader(http.StatusLocked)
@@ -161,6 +164,7 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 					h.Locked = true
 				}
 			}
+
 		case "/bar.tflock":
 			if h.Locked {
 				w.WriteHeader(http.StatusLocked)
@@ -190,8 +194,8 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		case "/bar.tflock":
 			h.Locked = false
 			delete(h.Data, "/bar.tflock")
-
 		}
+
 	case "DELETE":
 		switch r.URL.Path {
 		// Delete foo.tfstate
