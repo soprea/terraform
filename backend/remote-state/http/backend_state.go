@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	//"io"
-	"log"
+	"path/filepath"
 	"sort"
-	//	"net/http"
 	"strings"
 
 	"github.com/hashicorp/terraform/backend"
@@ -21,51 +19,41 @@ const (
 	lockFileSuffix  = ".tflock"
 )
 
+// get a list of all states.
 func (b *Backend) States() ([]string, error) {
-	//result := []string{backend.DefaultStateName}
-  var result []string
+	var result []string
 	client := &RemoteClient{
-		client:        b.client,
-		address:       b.address,
-		updateMethod:  b.updateMethod,
-		lockAddress:   b.lockAddress,
-		unlockAddress: b.unlockAddress,
-		lockMethod:    b.lockMethod,
-		unlockMethod:  b.unlockMethod,
-		username:      b.username,
-		password:      b.password,
+		client:   b.client,
+		address:  b.address,
+		username: b.username,
+		password: b.password,
 	}
 
-	log.Printf("[DEBUG] BACKEND Stefan States client is: [%+v]", client)
 	resp, err := client.Get()
 	if err != nil {
 		return nil, err
 	}
 	// Read in the body
-	log.Printf("[DEBUG] BACKEND Stefan States resp.Data is: [%s]", string(resp.Data))
-
+	// Get all the data sent by REST
 	buff := string(resp.Data)
-	log.Printf("[DEBUG] BACKEND Stefan States buff is: [%s]", buff)
 	buff = strings.Replace(buff, ",", " ", -1)
 	buffSlice := strings.Fields(buff)
-	log.Printf("[DEBUG] BACKEND Stefan States buff is: [%s]", buff)
-	log.Printf("[DEBUG] BACKEND Stefan States buff type is: [%T]", buff)
-
+  sort.Strings(buffSlice)
 	for _, el := range buffSlice {
-		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", string(el))
-		eltp := strings.TrimSuffix(el, ".tfstate")
-		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", eltp)
-
-		elts := strings.TrimPrefix(eltp, "/")
-		log.Printf("[DEBUG] BACKEND Stefan States obj is: [%s]", elts)
-		if elts != "" {
-			result = append(result, elts)
+		// iterate on reposne and make sure we only get .tfstate files
+		// This should be implemented in REST API but just to be safe.
+		fName := filepath.Base(el)
+		extName := filepath.Ext(el)
+		bname := fName[:len(fName)-len(extName)]
+		if extName == stateFileSuffix {
+			result = append(result, bname)
 		}
 	}
 
-	log.Printf("[DEBUG] BACKEND Stefan States result is: [%s]", result)
-	sort.Strings(result[1:])
-
+	//sort.Strings(result[1:])
+if sort.SearchStrings(results, "default"){
+  result = append(result, "default")
+}
 	return result, nil
 }
 
@@ -107,31 +95,30 @@ func (b *Backend) State(name string) (state.State, error) {
 	}
 
 	stateMgr := &remote.State{Client: client}
-	// take a lock on this state while we write it
-	lockInfo := state.NewLockInfo()
-	lockInfo.Operation = "init"
-	lockId, err := client.Lock(lockInfo)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to lock http state: %s", err)
-	}
-
-	// Local helper function so we can call it multiple places
-	lockUnlock := func(parent error) error {
-		if err := stateMgr.Unlock(lockId); err != nil {
-			return fmt.Errorf(strings.TrimSpace(errStateUnlock), lockId, err)
-		}
-		return parent
-	}
 
 	// Grab the value
 	if err := stateMgr.RefreshState(); err != nil {
-		err = lockUnlock(err)
 		return nil, err
 	}
 
 	// If we have no state, we have to create an empty state
 	if v := stateMgr.State(); v == nil {
+		// take a lock on this state while we write it
+		lockInfo := state.NewLockInfo()
+		lockInfo.Operation = "init"
+		lockId, err := client.Lock(lockInfo)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to lock http state: %s", err)
+		}
+
+		// Local helper function so we can call it multiple places
+		lockUnlock := func(parent error) error {
+			if err := stateMgr.Unlock(lockId); err != nil {
+				return fmt.Errorf(strings.TrimSpace(errStateUnlock), lockId, err)
+			}
+			return parent
+		}
 
 		if err := stateMgr.WriteState(terraform.NewState()); err != nil {
 			err = lockUnlock(err)
@@ -142,16 +129,15 @@ func (b *Backend) State(name string) (state.State, error) {
 			return nil, err
 		}
 
+		// Unlock, the state should now be initialized
+		if err := lockUnlock(nil); err != nil {
+			return nil, err
+		}
 	}
-
-	// Unlock, the state should now be initialized
-	if err := lockUnlock(nil); err != nil {
-		return nil, err
-	}
-
 	return stateMgr, nil
 }
 
+// Construct the path of the state file based on named state
 func (b *Backend) statePath(name string) string {
 	paths := []string{b.address, "/", name, stateFileSuffix}
 	var buf bytes.Buffer
@@ -161,9 +147,9 @@ func (b *Backend) statePath(name string) string {
 	path := buf.String()
 
 	return path
-
 }
 
+// Construct the path of the lock file based on named state
 func (b *Backend) lockPath(name string) string {
 	paths := []string{b.address, "/", name, lockFileSuffix}
 	var buf bytes.Buffer
@@ -173,7 +159,6 @@ func (b *Backend) lockPath(name string) string {
 	path := buf.String()
 
 	return path
-
 }
 
 func (b *Backend) Client() *RemoteClient {

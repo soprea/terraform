@@ -6,9 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	multierror "github.com/hashicorp/go-multierror"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -39,7 +39,6 @@ type RemoteClient struct {
 func (c *RemoteClient) Get() (*remote.Payload, error) {
 	// Convert address to type URL
 	addressURL, _ := url.Parse(c.address)
-	log.Printf("[DEBUG] CLIENT Stefan GET client address is: [%+v]", c.address)
 
 	resp, err := c.httpRequest("GET", addressURL, nil, "get state")
 	if err != nil {
@@ -75,7 +74,6 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	payload := &remote.Payload{
 		Data: buf.Bytes(),
 	}
-	log.Printf("[DEBUG] CLIENT Stefan GET client payload is: [%+v]", payload)
 
 	// If there was no data, then return nil
 	//if buf == nil || len(buf.Bytes()) == 0 {
@@ -111,7 +109,6 @@ func (c *RemoteClient) Put(data []byte) error {
 	addressURL, _ := url.Parse(c.address)
 
 	base := *addressURL
-	log.Printf("[DEBUG] Client Stefan PUT base is: %#v", base)
 
 	if c.lockID != "" {
 		query := base.Query()
@@ -155,19 +152,16 @@ func (c *RemoteClient) Delete() error {
 
 // Lock writes to a lock file, ensuring file creation. Returns the generation number, which must be passed to Unlock().
 func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
-	log.Printf("[DEBUG] CLIENT Stefan LOCK client address is: [%+v]", c.lockAddress)
 
 	lockURL, _ := url.Parse(c.lockAddress)
 	c.lockID = ""
 
 	jsonLockInfo := info.Marshal()
-	log.Printf("[DEBUG] CLIENT Stefan LOCK client jsonLockInfo is: [%s]", jsonLockInfo)
 
 	resp, err := c.httpRequest(c.lockMethod, lockURL, &jsonLockInfo, "lock")
 	if err != nil {
 		return "", err
 	}
-	log.Printf("[DEBUG] CLIENT Stefan LOCK client resp is: [%+v]", resp)
 
 	defer resp.Body.Close()
 
@@ -176,14 +170,9 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 		c.lockID = info.ID
 		c.jsonLockInfo = jsonLockInfo
 		return info.ID, nil
-	case http.StatusUnauthorized:
-		return "", fmt.Errorf("HTTP remote state endpoint requires auth")
-	case http.StatusForbidden:
-		return "", fmt.Errorf("HTTP remote state endpoint invalid auth")
 	case http.StatusConflict, http.StatusLocked:
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
-		log.Printf("[DEBUG] CLIENT Stefan LOCK body is: [%s]", body)
 
 		if err != nil {
 			return "", fmt.Errorf("HTTP remote state already locked, failed to read body")
@@ -193,18 +182,30 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("HTTP remote state already locked, failed to unmarshal body")
 		}
-		return "", fmt.Errorf("HTTP remote state already locked: ID=%s", existing.ID)
+		return "", c.lockError(fmt.Errorf("HTTP remote state already locked: ID=%s", existing.ID))
 	default:
 		return "", fmt.Errorf("Unexpected HTTP response code %d", resp.StatusCode)
 	}
 }
 
 func (c *RemoteClient) Unlock(id string) error {
-	log.Printf("[DEBUG] CLIENT Stefan UNLOCK client address is: [%+v]", c.unlockAddress)
+
+	lockErr := &state.LockError{}
+
+	lockInfo, err := c.lockInfo()
+	if err != nil {
+		lockErr.Err = fmt.Errorf("failed to retrieve lock info: %s", err)
+		return lockErr
+	}
+	lockErr.Info = lockInfo
+
+	if lockInfo.ID != id {
+		lockErr.Err = fmt.Errorf("lock id %q does not match existing lock", id)
+		return lockErr
+	}
 
 	unlockURL, _ := url.Parse(c.unlockAddress)
 	resp, err := c.httpRequest(c.unlockMethod, unlockURL, &c.jsonLockInfo, "unlock")
-	log.Printf("[DEBUG] CLIENT Stefan UNLOCK client resp is: [%+v]", resp)
 	if err != nil {
 		return err
 	}
@@ -216,6 +217,53 @@ func (c *RemoteClient) Unlock(id string) error {
 		return nil
 	default:
 		return fmt.Errorf("Unexpected HTTP response code %d", resp.StatusCode)
+	}
+}
+
+func (c *RemoteClient) lockError(err error) *state.LockError {
+	lockErr := &state.LockError{
+		Err: err,
+	}
+
+	info, infoErr := c.lockInfo()
+	if infoErr != nil {
+		lockErr.Err = multierror.Append(lockErr.Err, infoErr)
+	} else {
+		lockErr.Info = info
+	}
+	return lockErr
+}
+
+// lockInfo reads the lock file, parses its contents and returns the parsed
+// LockInfo struct.
+func (c *RemoteClient) lockInfo() (*state.LockInfo, error) {
+	// Convert address to type URL
+	lockURL, _ := url.Parse(c.lockAddress)
+
+	resp, err := c.httpRequest("GET", lockURL, nil, "get lock")
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	// Read in the body
+	buf := bytes.NewBuffer(nil)
+	if _, err := io.Copy(buf, resp.Body); err != nil {
+		return nil, fmt.Errorf("Failed to read lock file: %s", err)
+	}
+
+	info := &state.LockInfo{}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		readBuf, _ := ioutil.ReadAll(buf)
+		if err := json.Unmarshal(readBuf, info); err != nil {
+			return nil, err
+		}
+		return info, nil
+	default:
+		return nil, fmt.Errorf("Unexpected HTTP response code %d", resp.StatusCode)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform/backend"
 	"github.com/hashicorp/terraform/helper/schema"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -33,7 +32,7 @@ func New() backend.Backend {
 			"lock_address": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "(Optional) The address of the lock REST endpoint. Defaults to disabled.",
+				Description: "(Optional) The address of the lock REST endpoint. Defaults to address.",
 			},
 
 			"lock_method": {
@@ -46,7 +45,7 @@ func New() backend.Backend {
 			"unlock_address": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "(Optional) The address of the unlock REST endpoint. Defaults to disabled.",
+				Description: "(Optional) The address of the unlock REST endpoint. Defaults to address.",
 			},
 
 			"unlock_method": {
@@ -78,14 +77,14 @@ func New() backend.Backend {
 			"local_cert_ca_file": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "CA to use",
+				Description: "CA to use when the rest api is using a self signed certificate.",
 			},
 
 			"mutual_tls_authentication": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
-				Description: "Use mutual tls authentication.local_cert_file, local_key_file, local_ca_file needs to be set.s. Defaults to false.",
+				Description: "Use mutual tls authentication.local_cert_file, local_key_file, local_ca_file needs to be set. Defaults to false.",
 			},
 
 			"local_cert_file": {
@@ -107,6 +106,7 @@ func New() backend.Backend {
 			},
 		},
 	}
+  
 	result := &Backend{Backend: s}
 	result.Backend.ConfigureFunc = result.configure
 	return result
@@ -146,10 +146,8 @@ func (b *Backend) configure(ctx context.Context) error {
 	// Validate URL address
 	isValidURL(addressURL)
 	b.address = addressURL
-	log.Printf("[DEBUG] BACKEND Stefan addressURL is: %s", b.address)
 
 	b.updateMethod = data.Get("update_method").(string)
-	log.Printf("[DEBUG] BACKEND Stefan updateMethod is: %s", b.updateMethod)
 
 	if v, ok := data.GetOk("lock_address"); ok {
 		lockAddress := v.(string)
@@ -160,10 +158,8 @@ func (b *Backend) configure(ctx context.Context) error {
 		// If lockAddress is null, use the http rest api address
 		b.lockAddress = b.address
 	}
-	log.Printf("[DEBUG] BACKEND Stefan lockAddress is: %s", b.lockAddress)
 
 	b.lockMethod = data.Get("lock_method").(string)
-	log.Printf("[DEBUG] BACKEND Stefan lockMethod is: %s", b.lockMethod)
 
 	if v, ok := data.GetOk("unlock_address"); ok {
 		unlockAddress := v.(string)
@@ -174,10 +170,8 @@ func (b *Backend) configure(ctx context.Context) error {
 		// If unlockAddress is null, use the http rest api address
 		b.unlockAddress = b.address
 	}
-	log.Printf("[DEBUG] BACKEND Stefan unlockAddress is: %s", b.unlockAddress)
 
 	b.unlockMethod = data.Get("unlock_method").(string)
-	log.Printf("[DEBUG] BACKEND Stefan unlockMethod is: %s", b.unlockMethod)
 
 	if v, ok := data.GetOk("username"); ok {
 		b.username = v.(string)
@@ -193,7 +187,7 @@ func (b *Backend) configure(ctx context.Context) error {
 		b.skipTls = v.(bool)
 		if b.skipTls {
 			// If skip_cert_verification = true, the address must be of type HTTPS
-			if isHttpHttps(addressURL) != "https" {
+			if !isHttps(addressURL) {
 				return fmt.Errorf("Address must be of type HTTPS if skip_cert_verification = true")
 			} else {
 				// If local_cert_ca_file is also set, raise an error
@@ -220,7 +214,7 @@ func (b *Backend) configure(ctx context.Context) error {
 
 	if v, ok := data.GetOk("local_cert_ca_file"); ok {
 		// If local_cert_ca_file exists, the address must be of type HTTPS
-		if isHttpHttps(addressURL) != "https" {
+		if !isHttps(addressURL) {
 			return fmt.Errorf("Address must be of type HTTPS if local_cert_ca_file is set.")
 		} else {
 			if data.Get("mutual_tls_authentication").(bool) == true {
@@ -262,7 +256,7 @@ func (b *Backend) configure(ctx context.Context) error {
 
 		if b.mutualTls {
 			// If mutual_tls_authentication = true, the address must be of type HTTPS
-			if isHttpHttps(addressURL) != "https" {
+			if !isHttps(addressURL) {
 				return fmt.Errorf("Address must be of type HTTPS if mutual_tls_authentication = true")
 			} else {
 				// If mutual_tls_authentication = true, the local_cert_file needs to be set.
@@ -325,17 +319,17 @@ func isValidURL(addr string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse address URL: %s", err)
 		if addre.Scheme != "http" && addre.Scheme != "https" {
-			return fmt.Errorf("address must be HTTP or HTTPS")
+			return fmt.Errorf("address must be of type HTTP or HTTPS")
 		}
 	}
 	return nil
 }
 
-func isHttpHttps(addr string) string {
+func isHttps(addr string) bool {
 	addre, _ := url.ParseRequestURI(addr)
-	if addre.Scheme == "http" {
-		return "http"
+	if addre.Scheme == "https" {
+		return true
 	} else {
-		return "https"
+		return false
 	}
 }
