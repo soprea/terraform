@@ -33,7 +33,7 @@ func TestBackendConfig(t *testing.T) {
 	}
 	//backends
 	b := backend.TestBackendConfig(t, New(), config).(*Backend)
-  //Test if backend address matches the URL
+	//Test if backend address matches the URL
 	if b.address != urls {
 		t.Fatal("Incorrect url was provided.")
 	}
@@ -68,7 +68,7 @@ type testHTTPHandler struct {
 
 func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if h.Data == nil {
-    // initialize a map that will store all tfstate and tflock files.
+		// initialize a map that will store all tfstate and tflock files.
 		h.Data = make(map[string][]byte)
 	}
 	switch r.Method {
@@ -87,9 +87,10 @@ func (h *testHTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		case "/default.tflock":
 			w.Write(h.Data["/default.tflock"])
 		case "/":
-			// return all keys(as states)
+			// returns all keys(as states)
+			// States() will
 			var keys []string
-			for key, _ := range h.Data {
+			for key := range h.Data {
 				keys = append(keys, key)
 			}
 			all := fmt.Sprint(strings.Join(keys, ","))

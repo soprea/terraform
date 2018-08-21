@@ -6,17 +6,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	multierror "github.com/hashicorp/go-multierror"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 
+	multierror "github.com/hashicorp/go-multierror"
+
 	"github.com/hashicorp/terraform/state"
 	"github.com/hashicorp/terraform/state/remote"
 )
 
-// remoteClient is used by "state/remote".State to read and write
+// RemoteClient is used by "state/remote".State to read and write
 // blobs representing state.
 // Implements "state/remote".ClientLocker
 type RemoteClient struct {
@@ -36,6 +37,7 @@ type RemoteClient struct {
 	jsonLockInfo []byte
 }
 
+// Get blah
 func (c *RemoteClient) Get() (*remote.Payload, error) {
 	// Convert address to type URL
 	addressURL, _ := url.Parse(c.address)
@@ -104,6 +106,7 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	return payload, nil
 }
 
+// Put state
 func (c *RemoteClient) Put(data []byte) error {
 	// Copy the target URL
 	addressURL, _ := url.Parse(c.address)
@@ -132,6 +135,7 @@ func (c *RemoteClient) Put(data []byte) error {
 	}
 }
 
+// Delete state
 func (c *RemoteClient) Delete() error {
 	// Make the request
 	addressURL, _ := url.Parse(c.address)
@@ -188,6 +192,7 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 	}
 }
 
+// Unlock the state with id from lock.
 func (c *RemoteClient) Unlock(id string) error {
 
 	lockErr := &state.LockError{}
@@ -269,7 +274,7 @@ func (c *RemoteClient) lockInfo() (*state.LockInfo, error) {
 
 func (c *RemoteClient) httpRequest(method string, url *url.URL, data *[]byte, what string) (*http.Response, error) {
 	// If we have data we need a reader
-	var reader io.Reader = nil
+	var reader io.Reader
 	if data != nil {
 		reader = bytes.NewReader(*data)
 	}

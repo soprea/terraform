@@ -19,7 +19,7 @@ const (
 	lockFileSuffix  = ".tflock"
 )
 
-// get a list of all states.
+// States get a list of all states.
 func (b *Backend) States() ([]string, error) {
 	var result []string
 	client := &RemoteClient{
@@ -38,9 +38,9 @@ func (b *Backend) States() ([]string, error) {
 	buff := string(resp.Data)
 	buff = strings.Replace(buff, ",", " ", -1)
 	buffSlice := strings.Fields(buff)
-  sort.Strings(buffSlice)
+	sort.Strings(buffSlice)
 	for _, el := range buffSlice {
-		// iterate on reposne and make sure we only get .tfstate files
+		// iterate on response and make sure we only get .tfstate files
 		// This should be implemented in REST API but just to be safe.
 		fName := filepath.Base(el)
 		extName := filepath.Ext(el)
@@ -50,13 +50,14 @@ func (b *Backend) States() ([]string, error) {
 		}
 	}
 
-	//sort.Strings(result[1:])
-if sort.SearchStrings(results, "default"){
-  result = append(result, "default")
-}
+	sort.Strings(result[1:])
+	if sort.SearchStrings(result, backend.DefaultStateName) == 0 {
+		result = append(result, backend.DefaultStateName)
+	}
 	return result, nil
 }
 
+// DeleteState deletes a state file
 func (b *Backend) DeleteState(name string) error {
 	if name == backend.DefaultStateName || name == "" {
 		return fmt.Errorf("can't delete default state")
@@ -88,6 +89,7 @@ func (b *Backend) remoteClient(name string) (*RemoteClient, error) {
 	return client, nil
 }
 
+// State reads the state file
 func (b *Backend) State(name string) (state.State, error) {
 	client, err := b.remoteClient(name)
 	if err != nil {
@@ -106,7 +108,7 @@ func (b *Backend) State(name string) (state.State, error) {
 		// take a lock on this state while we write it
 		lockInfo := state.NewLockInfo()
 		lockInfo.Operation = "init"
-		lockId, err := client.Lock(lockInfo)
+		lockID, err := client.Lock(lockInfo)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to lock http state: %s", err)
@@ -114,8 +116,8 @@ func (b *Backend) State(name string) (state.State, error) {
 
 		// Local helper function so we can call it multiple places
 		lockUnlock := func(parent error) error {
-			if err := stateMgr.Unlock(lockId); err != nil {
-				return fmt.Errorf(strings.TrimSpace(errStateUnlock), lockId, err)
+			if err := stateMgr.Unlock(lockID); err != nil {
+				return fmt.Errorf(strings.TrimSpace(errStateUnlock), lockID, err)
 			}
 			return parent
 		}
@@ -161,6 +163,7 @@ func (b *Backend) lockPath(name string) string {
 	return path
 }
 
+// Client initialized
 func (b *Backend) Client() *RemoteClient {
 	return &RemoteClient{}
 }

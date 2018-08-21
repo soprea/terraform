@@ -5,14 +5,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/hashicorp/terraform/backend"
-	"github.com/hashicorp/terraform/helper/schema"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/hashicorp/terraform/backend"
+	"github.com/hashicorp/terraform/helper/schema"
 )
 
+// New Backend
 func New() backend.Backend {
 	s := &schema.Backend{
 		Schema: map[string]*schema.Schema{
@@ -106,12 +108,13 @@ func New() backend.Backend {
 			},
 		},
 	}
-  
+
 	result := &Backend{Backend: s}
 	result.Backend.ConfigureFunc = result.configure
 	return result
 }
 
+// Backend Structure
 type Backend struct {
 	*schema.Backend
 	data   *schema.ResourceData
@@ -124,12 +127,12 @@ type Backend struct {
 	lockMethod      string
 	unlockMethod    string
 	unlockAddress   string
-	skipTls         bool
+	skipTLS         bool
 	localCertCAFile string
 	localCertFile   string
 	localKeyFile    string
 	localCAFile     string
-	mutualTls       bool
+	mutualTLS       bool
 	username        string
 	password        string
 }
@@ -184,128 +187,125 @@ func (b *Backend) configure(ctx context.Context) error {
 	client := &http.Client{}
 
 	if v, ok := data.GetOk("skip_cert_verification"); ok {
-		b.skipTls = v.(bool)
-		if b.skipTls {
+		b.skipTLS = v.(bool)
+		if b.skipTLS {
 			// If skip_cert_verification = true, the address must be of type HTTPS
-			if !isHttps(addressURL) {
+			if !isHTTPS(addressURL) {
 				return fmt.Errorf("Address must be of type HTTPS if skip_cert_verification = true")
-			} else {
-				// If local_cert_ca_file is also set, raise an error
-				if data.Get("local_cert_ca_file").(string) != "" {
-					return fmt.Errorf("skip_cert_verification is true and local_cert_ca_file is set. Please choose one or the other.")
-				}
-				// If mutual_tls_authentication is also set, raise an error
-				if data.Get("mutual_tls_authentication").(bool) == true {
-					return fmt.Errorf("skip_cert_verification is true and mutual_tls_authentication is set. Please choose one or the other.")
-				} else {
-					// Replace the client with one that ignores TLS verification
-					client = &http.Client{
-						Timeout: time.Second * 10,
-						Transport: &http.Transport{
-							TLSClientConfig: &tls.Config{
-								InsecureSkipVerify: true,
-							},
-						},
-					}
-				}
 			}
-		}
-	}
-
-	if v, ok := data.GetOk("local_cert_ca_file"); ok {
-		// If local_cert_ca_file exists, the address must be of type HTTPS
-		if !isHttps(addressURL) {
-			return fmt.Errorf("Address must be of type HTTPS if local_cert_ca_file is set.")
-		} else {
+			// If local_cert_ca_file is also set, raise an error
+			if data.Get("local_cert_ca_file").(string) != "" {
+				return fmt.Errorf("skip_cert_verification is true and local_cert_ca_file is set. please choose one or the other")
+			}
+			// If mutual_tls_authentication is also set, raise an error
 			if data.Get("mutual_tls_authentication").(bool) == true {
-				return fmt.Errorf("mutual_tls_authentication is true and local_cert_ca_file is set. Please choose one or the other.")
-			}
-			if data.Get("skip_cert_verification").(bool) == true {
-				return fmt.Errorf("skip_cert_verification is true and local_cert_ca_file is set. Please choose one or the other.")
-			}
-			b.localCertCAFile = v.(string)
-
-			// Get the SystemCertPool, continue with an empty pool on error
-			rootCAs, _ := x509.SystemCertPool()
-			if rootCAs == nil {
-				rootCAs = x509.NewCertPool()
-			}
-			// Read in the ca cert file
-			cert, err := ioutil.ReadFile(b.localCertCAFile)
-			if err != nil {
-				return fmt.Errorf("Failed to read %s into memory: %s", b.localCertCAFile, err)
-			}
-			// Append our cert to the system pool
-			if ok := rootCAs.AppendCertsFromPEM(cert); !ok {
-				return fmt.Errorf("No certs could be appended: %s.", cert)
-			}
-			// Replace the client with one that contains the CA.
+				return fmt.Errorf("skip_cert_verification is true and mutual_tls_authentication is set. please choose one or the other")
+			} //else {
+			// Replace the client with one that ignores TLS verification
 			client = &http.Client{
 				Timeout: time.Second * 10,
 				Transport: &http.Transport{
 					TLSClientConfig: &tls.Config{
-						RootCAs: rootCAs,
+						InsecureSkipVerify: true,
 					},
 				},
 			}
 		}
 	}
 
-	if v, ok := data.GetOk("mutual_tls_authentication"); ok {
-		b.mutualTls = v.(bool)
+	if v, ok := data.GetOk("local_cert_ca_file"); ok {
+		// If local_cert_ca_file exists, the address must be of type HTTPS
+		if !isHTTPS(addressURL) {
+			return fmt.Errorf("Address must be of type HTTPS if local_cert_ca_file is set")
+		} //else {
+		if data.Get("mutual_tls_authentication").(bool) == true {
+			return fmt.Errorf("mutual_tls_authentication is true and local_cert_ca_file is set. Please choose one or the other")
+		}
+		if data.Get("skip_cert_verification").(bool) == true {
+			return fmt.Errorf("skip_cert_verification is true and local_cert_ca_file is set. Please choose one or the other")
+		}
+		b.localCertCAFile = v.(string)
 
-		if b.mutualTls {
+		// Get the SystemCertPool, continue with an empty pool on error
+		rootCAs, _ := x509.SystemCertPool()
+		if rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+		// Read in the ca cert file
+		cert, err := ioutil.ReadFile(b.localCertCAFile)
+		if err != nil {
+			return fmt.Errorf("Failed to read %s into memory: %s", b.localCertCAFile, err)
+		}
+		// Append our cert to the system pool
+		if ok := rootCAs.AppendCertsFromPEM(cert); !ok {
+			return fmt.Errorf("No certs could be appended: %s", cert)
+		}
+		// Replace the client with one that contains the CA.
+		client = &http.Client{
+			Timeout: time.Second * 10,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs: rootCAs,
+				},
+			},
+		}
+		//	}
+	}
+
+	if v, ok := data.GetOk("mutual_tls_authentication"); ok {
+		b.mutualTLS = v.(bool)
+
+		if b.mutualTLS {
 			// If mutual_tls_authentication = true, the address must be of type HTTPS
-			if !isHttps(addressURL) {
+			if !isHTTPS(addressURL) {
 				return fmt.Errorf("Address must be of type HTTPS if mutual_tls_authentication = true")
+			}
+			// If mutual_tls_authentication = true, the local_cert_file needs to be set.
+			if v, ok := data.GetOk("local_cert_file"); ok {
+				b.localCertFile = v.(string)
 			} else {
-				// If mutual_tls_authentication = true, the local_cert_file needs to be set.
-				if v, ok := data.GetOk("local_cert_file"); ok {
-					b.localCertFile = v.(string)
-				} else {
-					return fmt.Errorf("mutual_tls_authentication is true and local_cert_file is not set %s.", b.localCertFile)
-				}
-				// If mutual_tls_authentication = true, the local_key_file needs to be set.
-				if v, ok := data.GetOk("local_key_file"); ok {
-					b.localKeyFile = v.(string)
-				} else {
-					return fmt.Errorf("mutual_tls_authentication is true and local_key_file is not set %s.", b.localKeyFile)
-				}
-				// If mutual_tls_authentication = true, the local_ca_file needs to be set.
-				if v, ok := data.GetOk("local_ca_file"); ok {
-					b.localCAFile = v.(string)
-				} else {
-					return fmt.Errorf("mutual_tls_authentication is true and local_ca_file is not set %s.", b.localCAFile)
-				}
-				// load client cert
-				certs, err := tls.LoadX509KeyPair(b.localCertFile, b.localKeyFile)
-				if err != nil {
-					return fmt.Errorf("Can not load pem files: %s and : %s. Error: %s", b.localCertFile, b.localKeyFile, err)
-				}
-				// Get the SystemCertPool, continue with an empty pool on error
-				rootCAs, _ := x509.SystemCertPool()
-				if rootCAs == nil {
-					rootCAs = x509.NewCertPool()
-				}
-				// Read in the ca cert file
-				cert, err := ioutil.ReadFile(b.localCAFile)
-				if err != nil {
-					return fmt.Errorf("Failed to read %s into memory: %s", b.localCAFile, err)
-				}
-				// Append our cert to the system pool
-				if ok := rootCAs.AppendCertsFromPEM(cert); !ok {
-					return fmt.Errorf("No certs could be appended: %s.", cert)
-				}
-				// Replace the client with one that contains the certs.
-				client = &http.Client{
-					Timeout: time.Second * 10,
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							Certificates: []tls.Certificate{certs},
-							RootCAs:      rootCAs,
-						},
+				return fmt.Errorf("mutual_tls_authentication is true and local_cert_file is not set %s", b.localCertFile)
+			}
+			// If mutual_tls_authentication = true, the local_key_file needs to be set.
+			if v, ok := data.GetOk("local_key_file"); ok {
+				b.localKeyFile = v.(string)
+			} else {
+				return fmt.Errorf("mutual_tls_authentication is true and local_key_file is not set %s", b.localKeyFile)
+			}
+			// If mutual_tls_authentication = true, the local_ca_file needs to be set.
+			if v, ok := data.GetOk("local_ca_file"); ok {
+				b.localCAFile = v.(string)
+			} else {
+				return fmt.Errorf("mutual_tls_authentication is true and local_ca_file is not set %s", b.localCAFile)
+			}
+			// load client cert
+			certs, err := tls.LoadX509KeyPair(b.localCertFile, b.localKeyFile)
+			if err != nil {
+				return fmt.Errorf("Can not load pem files: %s and : %s. Error: %s", b.localCertFile, b.localKeyFile, err)
+			}
+			// Get the SystemCertPool, continue with an empty pool on error
+			rootCAs, _ := x509.SystemCertPool()
+			if rootCAs == nil {
+				rootCAs = x509.NewCertPool()
+			}
+			// Read in the ca cert file
+			cert, err := ioutil.ReadFile(b.localCAFile)
+			if err != nil {
+				return fmt.Errorf("Failed to read %s into memory: %s", b.localCAFile, err)
+			}
+			// Append our cert to the system pool
+			if ok := rootCAs.AppendCertsFromPEM(cert); !ok {
+				return fmt.Errorf("No certs could be appended: %s", cert)
+			}
+			// Replace the client with one that contains the certs.
+			client = &http.Client{
+				Timeout: time.Second * 10,
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						Certificates: []tls.Certificate{certs},
+						RootCAs:      rootCAs,
 					},
-				}
+				},
 			}
 		}
 	}
@@ -318,18 +318,17 @@ func isValidURL(addr string) error {
 	addre, err := url.ParseRequestURI(addr)
 	if err != nil {
 		return fmt.Errorf("failed to parse address URL: %s", err)
-		if addre.Scheme != "http" && addre.Scheme != "https" {
-			return fmt.Errorf("address must be of type HTTP or HTTPS")
-		}
+	}
+	if addre.Scheme != "http" && addre.Scheme != "https" {
+		return fmt.Errorf("address must be of type HTTP or HTTPS")
 	}
 	return nil
 }
 
-func isHttps(addr string) bool {
+func isHTTPS(addr string) bool {
 	addre, _ := url.ParseRequestURI(addr)
 	if addre.Scheme == "https" {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
