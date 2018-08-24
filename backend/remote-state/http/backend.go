@@ -147,7 +147,10 @@ func (b *Backend) configure(ctx context.Context) error {
 	// Store the URL address
 	addressURL := data.Get("address").(string)
 	// Validate URL address
-	isValidURL(addressURL)
+	validationErr := assertValidURL(addressURL)
+	if validationErr != nil {
+		return validationErr
+	}
 	b.address = addressURL
 
 	b.updateMethod = data.Get("update_method").(string)
@@ -155,7 +158,10 @@ func (b *Backend) configure(ctx context.Context) error {
 	if v, ok := data.GetOk("lock_address"); ok {
 		lockAddress := v.(string)
 		// Validate lockAddress
-		isValidURL(lockAddress)
+		validationErr := assertValidURL(lockAddress)
+		if validationErr != nil {
+			return validationErr
+		}
 		b.lockAddress = lockAddress
 	} else {
 		// If lockAddress is null, use the http rest api address
@@ -167,7 +173,10 @@ func (b *Backend) configure(ctx context.Context) error {
 	if v, ok := data.GetOk("unlock_address"); ok {
 		unlockAddress := v.(string)
 		// Validate unlockAddress
-		isValidURL(unlockAddress)
+		validationErr := assertValidURL(unlockAddress)
+		if validationErr != nil {
+			return validationErr
+		}
 		b.unlockAddress = unlockAddress
 	} else {
 		// If unlockAddress is null, use the http rest api address
@@ -184,7 +193,9 @@ func (b *Backend) configure(ctx context.Context) error {
 		b.password = v.(string)
 	}
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
 
 	if v, ok := data.GetOk("skip_cert_verification"); ok {
 		b.skipTLS = v.(bool)
@@ -194,13 +205,13 @@ func (b *Backend) configure(ctx context.Context) error {
 				return fmt.Errorf("Address must be of type HTTPS if skip_cert_verification = true")
 			}
 			// If local_cert_ca_file is also set, raise an error
-			if data.Get("local_cert_ca_file").(string) != "" {
-				return fmt.Errorf("skip_cert_verification is true and local_cert_ca_file is set. please choose one or the other")
+			if v, ok := data.GetOk("local_cert_ca_file"); ok {
+				return fmt.Errorf("skip_cert_verification is %t and local_cert_ca_file is set: %s. please choose one or the other", b.skipTLS, v)
 			}
 			// If mutual_tls_authentication is also set, raise an error
 			if data.Get("mutual_tls_authentication").(bool) == true {
 				return fmt.Errorf("skip_cert_verification is true and mutual_tls_authentication is set. please choose one or the other")
-			} //else {
+			}
 			// Replace the client with one that ignores TLS verification
 			client = &http.Client{
 				Timeout: time.Second * 10,
@@ -217,7 +228,7 @@ func (b *Backend) configure(ctx context.Context) error {
 		// If local_cert_ca_file exists, the address must be of type HTTPS
 		if !isHTTPS(addressURL) {
 			return fmt.Errorf("Address must be of type HTTPS if local_cert_ca_file is set")
-		} //else {
+		}
 		if data.Get("mutual_tls_authentication").(bool) == true {
 			return fmt.Errorf("mutual_tls_authentication is true and local_cert_ca_file is set. Please choose one or the other")
 		}
@@ -249,7 +260,6 @@ func (b *Backend) configure(ctx context.Context) error {
 				},
 			},
 		}
-		//	}
 	}
 
 	if v, ok := data.GetOk("mutual_tls_authentication"); ok {
@@ -314,7 +324,7 @@ func (b *Backend) configure(ctx context.Context) error {
 	return nil
 }
 
-func isValidURL(addr string) error {
+func assertValidURL(addr string) error {
 	addre, err := url.ParseRequestURI(addr)
 	if err != nil {
 		return fmt.Errorf("failed to parse address URL: %s", err)
